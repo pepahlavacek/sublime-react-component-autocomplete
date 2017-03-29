@@ -18,9 +18,13 @@ class ReactComponentAutocomplete(sublime_plugin.EventListener):
     self.component_names = []
     self.component_name_suggestions = []
     self.initial_autocomplete_point = None
+    self.loaded_folder = None
 
-  def on_load(self, view):
-    self.preload_files(view)
+  def on_load_async(self, view):
+    self.preload_files(view, False)
+
+  def on_post_save_async(self, view):
+    self.preload_files(view, True)
 
   def find_settings_file(self, view):
     folders = os.path.dirname(view.file_name()).split("/")
@@ -42,10 +46,7 @@ class ReactComponentAutocomplete(sublime_plugin.EventListener):
 
       return component_folder
 
-  def preload_files(self, view):
-    self.components = {}
-    self.component_names = []
-    self.component_name_suggestions = []
+  def preload_files(self, view, override=False):
 
     syntax = get_syntax(view.settings().get('syntax'))
 
@@ -55,8 +56,15 @@ class ReactComponentAutocomplete(sublime_plugin.EventListener):
 
     if settings_file:
       component_folder = self.get_component_folder(settings_file)
+      if self.loaded_folder == component_folder and not override:
+        # prevent preloading on file browsing
+        return
     else:
       return
+
+    self.components = {}
+    self.component_names = []
+    self.component_name_suggestions = []
 
     for root, dirs, files in os.walk(component_folder, topdown=False):
       for name in files:
@@ -83,6 +91,7 @@ class ReactComponentAutocomplete(sublime_plugin.EventListener):
           self.component_names.sort()
 
     self.component_name_suggestions = [(self.components[name]["suggestion"]["title"], self.components[name]["suggestion"]["suggestion"]) for name in self.component_names]
+    self.loaded_folder = component_folder
 
   """
   Runs when the file is modified
@@ -116,7 +125,6 @@ class ReactComponentAutocomplete(sublime_plugin.EventListener):
         component_name = view.substr(view.word(start_of_component))
 
         sugs = []
-        print(len(self.components))
         if component_name in self.components:
           required_text = ""
           sugs = []
